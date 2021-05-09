@@ -14,7 +14,7 @@ import javax.mail.Part;
 import java.io.*;
 import java.util.*;
 
-public class POP3Server {
+public class FetchEmailServer {
 
     public static void check(String host, String storeType, String user, String password) {
         try {
@@ -22,13 +22,13 @@ public class POP3Server {
             // create properties field
             Properties properties = new Properties();
 
-            properties.put("mail.pop3.host", host);
-            properties.put("mail.pop3.port", "995");
-            properties.put("mail.pop3.starttls.enable", "true");
+            properties.put("mail.imap.host", host);
+            properties.put("mail.imap.port", "993");
+            properties.put("mail.imap.starttls.enable", "true");
             Session emailSession = Session.getDefaultInstance(properties);
 
-            // create the POP3 store object and connect with the pop server
-            Store store = emailSession.getStore("pop3s");
+            // create the IMAP store object and connect with the pop server
+            Store store = emailSession.getStore("imaps");
 
             store.connect(host, user, password);
 
@@ -52,8 +52,9 @@ public class POP3Server {
                     for (int j = 0; j < parts.getCount(); j++) {
                         BodyPart part = parts.getBodyPart(j);
                         try {
-                            writePDF(part);
-                            writeText(part);
+                            String nameSuffix = getFileFriendlyName(message.getFrom()[0] + " - " + message.getSubject()); 
+                            writePDF(part, nameSuffix);
+                            writeText(part, nameSuffix);
                         } catch (MessagingException e) {
                                 e.printStackTrace();
                         }
@@ -78,18 +79,19 @@ public class POP3Server {
     /**
      * Write a PDF attachment to a file.
      * @param p
+     * @param nameSuffix text that will be added to the end of the filename.
      */
-    public static void writePDF(Part p) throws MessagingException, IOException {
+    public static void writePDF(Part p, String nameSuffix) throws MessagingException, IOException {
         if (p.isMimeType("application/pdf")) {
+            String usedNameSuffix = nameSuffix != null ? nameSuffix : "";
             /*
             * Code from https://www.tutorialspoint.com/javamail_api/javamail_api_quick_guide.htm
             */
-            File f = new File("bidoofPDF" + new Date().getTime() + ".pdf");
+            File f = new File("m" + new Date().getTime() + "_" + usedNameSuffix + ".pdf");
             DataOutputStream output = new DataOutputStream(
                 new BufferedOutputStream(new FileOutputStream(f)));
-                com.sun.mail.util.BASE64DecoderStream test = 
-                    (com.sun.mail.util.BASE64DecoderStream) p
-                     .getContent();
+            com.sun.mail.util.BASE64DecoderStream test = 
+                (com.sun.mail.util.BASE64DecoderStream) p.getContent();
             byte[] buffer = new byte[1024];
             int bytesRead;
             while ((bytesRead = test.read(buffer)) != -1) {
@@ -102,20 +104,37 @@ public class POP3Server {
     /**
      * Write email text to a file.
      * @param p
+     * @param nameSuffix text that will be added to the end of the filename.
      */
-    public static void writeText(Part p) throws MessagingException, IOException {
+    public static void writeText(Part p, String nameSuffix) throws MessagingException, IOException {
         if (p.isMimeType("text/plain")) {
-            File f = new File("bidoofTEXT" + new Date().getTime() + ".txt");
+            String usedNameSuffix = nameSuffix != null ? nameSuffix : "";
+            File f = new File("m" + new Date().getTime() + "_" + usedNameSuffix + ".txt");
             BufferedWriter writer = new BufferedWriter(new FileWriter(f));
             writer.write(p.getContent().toString());
             writer.close();
+        } else {
+            System.out.println("NOT TEXT!");
         }
+    }
+
+    /**
+     * Removes special characters from a filename that can not be used in Windows filenames.
+     * 
+     * @param toSanitize
+     * @return
+     */
+    public static String getFileFriendlyName(String toSanitize) {
+        String sanitized = toSanitize;
+        
+        sanitized = sanitized.replaceAll("<.*>", "").replace(".", "(dot)").replace("@", "(at)").replace(" ", "_").replaceAll("^[a-zA-Z0-9]", "");
+        return sanitized;
     }
 
     public static void main(String[] args) {
 
-        String host = "pop.gmail.com";// change accordingly
-        String mailStoreType = "pop3";
+        String host = "imap.gmail.com";// change accordingly
+        String mailStoreType = "imap";
         String username = "mrtorres989@gmail.com";// change accordingly
         String password = "@peLucha1989";// change accordingly
 
