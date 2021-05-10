@@ -42,7 +42,8 @@ public class FetchEmailServer {
             Folder emailFolder = store.getFolder("INBOX");
             emailFolder.open(Folder.READ_ONLY);
 
-            // retrieve the messages from the folder in an array and save their contents if applicable
+            // retrieve the messages from the folder in an array and save their contents if
+            // applicable
             Message[] messages = emailFolder.getMessages();
             logger.info("messages.length---" + messages.length);
 
@@ -117,7 +118,7 @@ public class FetchEmailServer {
         }
         String fileName = null;
         if (p.isMimeType("application/pdf")) {
-            fileName = "m" + new Date().getTime() + ".pdf";
+            fileName = p.getFileName().replace(".pdf", "") + "_m" + new Date().getTime() + ".pdf";
             File f = new File("./out/pdfs/" + fileName);
             p.saveFile(f);
         }
