@@ -7,8 +7,8 @@ import javax.mail.NoSuchProviderException;
 import javax.mail.Session;
 import javax.mail.Store;
 import javax.mail.internet.MimeMultipart;
+import javax.mail.internet.MimeBodyPart;
 
-import javax.mail.BodyPart;
 import javax.mail.Part;
 
 import java.io.*;
@@ -16,8 +16,14 @@ import java.util.*;
 
 public class FetchEmailServer {
 
+    private static java.util.logging.Logger logger = java.util.logging.Logger.getLogger("MyLogger", null);
+
     public static void check(String host, String storeType, String user, String password) {
         try {
+            File f = new File("./out/pdfs/");
+            f.mkdirs();
+            f = new File("./out/completed/");
+            f.mkdirs();
 
             // create properties field
             Properties properties = new Properties();
@@ -36,36 +42,24 @@ public class FetchEmailServer {
             Folder emailFolder = store.getFolder("INBOX");
             emailFolder.open(Folder.READ_ONLY);
 
-            // retrieve the messages from the folder in an array and print it
+            // retrieve the messages from the folder in an array and save their contents if applicable
             Message[] messages = emailFolder.getMessages();
-            System.out.println("messages.length---" + messages.length);
+            logger.info("messages.length---" + messages.length);
 
             for (int i = 0, n = messages.length; i < n; i++) {
                 Message message = messages[i];
-                System.out.println("---------------------------------");
-                System.out.println("Email Number " + (i + 1));
-                System.out.println("Subject: " + message.getSubject());
-                System.out.println("From: " + message.getFrom()[0]);
-                Object content = message.getContent();
-                if (content instanceof MimeMultipart) {
-                    MimeMultipart parts = (MimeMultipart) content;
-                    for (int j = 0; j < parts.getCount(); j++) {
-                        BodyPart part = parts.getBodyPart(j);
-                        try {
-                            String nameSuffix = getFileFriendlyName(message.getFrom()[0] + " - " + message.getSubject()); 
-                            writePDF(part, nameSuffix);
-                            writeText(part, nameSuffix);
-                        } catch (MessagingException e) {
-                                e.printStackTrace();
-                        }
-                    }
-                }
-                System.out.println();
+                logger.info("---------------------------------" + "\nEmail Number " + (i + 1) + "\nSubject: "
+                        + message.getSubject() + "\nFrom: " + message.getFrom()[0] + "\n");
+                String header = "Subject: " + message.getSubject() + "\nFrom: " + message.getFrom()[0] + "\nTo: "
+                        + message.getAllRecipients()[0] + "\n------------------------------------------------------";
+                String footer = "-----------END OF EMAIL-----------";
+                saveMessageParts(message, header, footer);
+
             }
 
-        // close the store and folder objects
-        emailFolder.close(false);
-        store.close();
+            // close the store and folder objects
+            emailFolder.close(false);
+            store.close();
 
         } catch (NoSuchProviderException e) {
             e.printStackTrace();
@@ -77,58 +71,85 @@ public class FetchEmailServer {
     }
 
     /**
-     * Write a PDF attachment to a file.
-     * @param p
-     * @param nameSuffix text that will be added to the end of the filename.
-     */
-    public static void writePDF(Part p, String nameSuffix) throws MessagingException, IOException {
-        if (p.isMimeType("application/pdf")) {
-            String usedNameSuffix = nameSuffix != null ? nameSuffix : "";
-            /*
-            * Code from https://www.tutorialspoint.com/javamail_api/javamail_api_quick_guide.htm
-            */
-            File f = new File("m" + new Date().getTime() + "_" + usedNameSuffix + ".pdf");
-            DataOutputStream output = new DataOutputStream(
-                new BufferedOutputStream(new FileOutputStream(f)));
-            com.sun.mail.util.BASE64DecoderStream test = 
-                (com.sun.mail.util.BASE64DecoderStream) p.getContent();
-            byte[] buffer = new byte[1024];
-            int bytesRead;
-            while ((bytesRead = test.read(buffer)) != -1) {
-                output.write(buffer, 0, bytesRead);
-            }
-            output.close();
-        }
-    }
-
-    /**
-     * Write email text to a file.
-     * @param p
-     * @param nameSuffix text that will be added to the end of the filename.
-     */
-    public static void writeText(Part p, String nameSuffix) throws MessagingException, IOException {
-        if (p.isMimeType("text/plain")) {
-            String usedNameSuffix = nameSuffix != null ? nameSuffix : "";
-            File f = new File("m" + new Date().getTime() + "_" + usedNameSuffix + ".txt");
-            BufferedWriter writer = new BufferedWriter(new FileWriter(f));
-            writer.write(p.getContent().toString());
-            writer.close();
-        } else {
-            System.out.println("NOT TEXT!");
-        }
-    }
-
-    /**
-     * Removes special characters from a filename that can not be used in Windows filenames.
+     * Breaks down the main part into its subparts, then saves subparts with the
+     * application/pdf or text/plain content type to a file.
      * 
-     * @param toSanitize
-     * @return
+     * @param main   the main part to break down
+     * @param header the text that will show at the beginning of a text file.
+     * @param footer the text that will show at the end of a text file.
+     * 
      */
-    public static String getFileFriendlyName(String toSanitize) {
-        String sanitized = toSanitize;
-        
-        sanitized = sanitized.replaceAll("<.*>", "").replace(".", "(dot)").replace("@", "(at)").replace(" ", "_").replaceAll("^[a-zA-Z0-9]", "");
-        return sanitized;
+    public static void saveMessageParts(Part main, String header, String footer)
+            throws IOException, MessagingException {
+        Object content = main.getContent();
+        if (content instanceof MimeMultipart) {
+            MimeMultipart parts = (MimeMultipart) content;
+            for (int j = 0; j < parts.getCount(); j++) {
+                MimeBodyPart part = (MimeBodyPart) parts.getBodyPart(j);
+                logger.info("j = " + j + " content type = " + part.getContentType());
+                try {
+                    String PDFFile = writePDF(part);
+                    if (PDFFile != null) {
+                        logger.info("---------------------------------" + "\nPDF " + PDFFile
+                                + " in ./out/pdfs/ created.\n");
+                    }
+                    if (part.isMimeType("multipart/alternative")) {
+                        saveMessageParts(part, header, footer);
+                    }
+                    writeText(part, header, footer);
+                } catch (MessagingException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    /**
+     * Write a PDF attachment to a file. The attachment is in the form of a
+     * MimeBodyPart.
+     * 
+     * @param p A MimeBodyPart with the application/pdf content type.
+     * @return the name of the created file, or null if not created
+     */
+    public static String writePDF(MimeBodyPart p) throws MessagingException, IOException {
+        if (p == null) {
+            throw new IllegalArgumentException("No null parameters allowed");
+        }
+        String fileName = null;
+        if (p.isMimeType("application/pdf")) {
+            fileName = "m" + new Date().getTime() + ".pdf";
+            File f = new File("./out/pdfs/" + fileName);
+            p.saveFile(f);
+        }
+        return fileName;
+    }
+
+    /**
+     * Write email text to a file. The email text is in the form of a MimeBodyPart.
+     * Also has options to add a header and footer to the text.
+     * 
+     * @param p      A MimeBodyPart with the text/plain content type. Contains the
+     *               body.
+     * @param header The text that will be placed before the body.
+     * @param footer the text that will be placed after the body.
+     * @return the name of the created file, or null if not created
+     */
+    public static String writeText(MimeBodyPart p, String header, String footer)
+            throws MessagingException, IOException {
+        if (p == null || header == null || footer == null) {
+            throw new IllegalArgumentException("No null parameters allowed");
+        }
+        String fileName = null;
+        if (p.isMimeType("text/plain")) {
+            fileName = "m" + new Date().getTime() + ".txt";
+            File f = new File("./out/completed/" + fileName);
+            BufferedWriter writer = new BufferedWriter(new FileWriter(f));
+            writer.write(header + "\n");
+            writer.write(p.getContent().toString());
+            writer.write("\n" + footer);
+            writer.close();
+        }
+        return fileName;
     }
 
     public static void main(String[] args) {
