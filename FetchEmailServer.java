@@ -54,7 +54,10 @@ public class FetchEmailServer {
                 String header = "Subject: " + message.getSubject() + "\nFrom: " + message.getFrom()[0] + "\nTo: "
                         + message.getAllRecipients()[0] + "\n------------------------------------------------------";
                 String footer = "-----------END OF EMAIL-----------";
-                saveMessageParts(message, header, footer);
+                String folderName = "m" + new Date().getTime();
+                f = new File("./out/completed/" + folderName);
+                f.mkdirs();
+                saveMessageParts(message, header, footer, folderName);
 
             }
 
@@ -80,28 +83,35 @@ public class FetchEmailServer {
      * @param footer the text that will show at the end of a text file.
      * 
      */
-    public static void saveMessageParts(Part main, String header, String footer)
+    public static void saveMessageParts(Part main, String header, String footer, String folderName)
             throws IOException, MessagingException {
         Object content = main.getContent();
+
         if (content instanceof MimeMultipart) {
             MimeMultipart parts = (MimeMultipart) content;
             for (int j = 0; j < parts.getCount(); j++) {
                 MimeBodyPart part = (MimeBodyPart) parts.getBodyPart(j);
                 logger.info("j = " + j + " content type = " + part.getContentType());
                 try {
-                    String PDFFile = writePDF(part);
-                    if (PDFFile != null) {
-                        logger.info("---------------------------------" + "\nPDF " + PDFFile
-                                + " in ./out/pdfs/ created.\n");
+                    if (Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition())) {
+                        String PDFFile = writePDF(part, folderName);
+                        if (PDFFile != null) {
+                            logger.info("---------------------------------" + "\nPDF " + PDFFile + " in ./out/pdfs/"
+                                    + folderName + " created.\n");
+                        }
+                    } else if (part.isMimeType("multipart/alternative")) {
+                        saveMessageParts(part, header, footer, folderName);
+                    } else {
+                        writeText(part, header, footer, folderName);
+                        writeHTML(part, folderName);
                     }
-                    if (part.isMimeType("multipart/alternative")) {
-                        saveMessageParts(part, header, footer);
-                    }
-                    writeText(part, header, footer);
                 } catch (MessagingException e) {
                     e.printStackTrace();
                 }
             }
+        } else if (content instanceof String) {
+            String part = (String) content;
+            writeText(part, header, footer, folderName);
         }
     }
 
@@ -112,44 +122,100 @@ public class FetchEmailServer {
      * @param p A MimeBodyPart with the application/pdf content type.
      * @return the name of the created file, or null if not created
      */
-    public static String writePDF(MimeBodyPart p) throws MessagingException, IOException {
-        if (p == null) {
+    public static String writePDF(MimeBodyPart p, String folderName) throws MessagingException, IOException {
+        if (p == null || folderName == null) {
             throw new IllegalArgumentException("No null parameters allowed");
         }
         String fileName = null;
         if (p.isMimeType("application/pdf")) {
             fileName = p.getFileName().replace(".pdf", "") + "_m" + new Date().getTime() + ".pdf";
-            File f = new File("./out/pdfs/" + fileName);
+            File f = new File("./out/pdfs/" + (!folderName.isEmpty() ? folderName + "/" : ""));
+            f.mkdirs();
+            f = new File("./out/pdfs/" + (!folderName.isEmpty() ? folderName + "/" : "") + fileName);
             p.saveFile(f);
         }
         return fileName;
     }
 
     /**
-     * Write email text to a file. The email text is in the form of a MimeBodyPart.
-     * Also has options to add a header and footer to the text.
+     * Write HTML and referenced content to a file. The HTML core and its referenced
+     * content are MimeBodyParts.
      * 
-     * @param p      A MimeBodyPart with the text/plain content type. Contains the
-     *               body.
-     * @param header The text that will be placed before the body.
-     * @param footer the text that will be placed after the body.
+     * @param p          A MimeBodyPart with the text/html, text/png, or text/jpeg
+     *                   content type
+     * @param folderName the save folder location in /out/completed
+     * @return The name of the created file.
+     * @throws MessagingException
+     * @throws IOException
+     */
+    public static String writeHTML(MimeBodyPart p, String folderName) throws MessagingException, IOException {
+        if (p == null || folderName == null) {
+            throw new IllegalArgumentException("No null parameters allowed");
+        }
+        if (p.isMimeType("text/html") || p.isMimeType("image/png") || p.isMimeType("image/jpeg")) {
+            String fileName = (p.getFileName() == null ? "m" + new Date().getTime() : p.getFileName());
+
+            if (p.isMimeType("text/html"))
+                fileName += ".htm";
+
+            File f = new File("./out/completed/" + (!folderName.isEmpty() ? folderName + "/" : "") + fileName);
+            p.saveFile(f);
+        }
+        return folderName;
+    }
+
+    /**
+     * Write email text to a file. The email text is a MimeBodyPart. Also has
+     * options to add a header and footer to the text.
+     * 
+     * @param p          A MimeBodyPart with the text/plain content type. Contains
+     *                   the body.
+     * @param header     The text that will be placed before the body.
+     * @param footer     the text that will be placed after the body.
+     * @param folderName the save folder location in /out/completed
      * @return the name of the created file, or null if not created
      */
-    public static String writeText(MimeBodyPart p, String header, String footer)
+    public static String writeText(MimeBodyPart p, String header, String footer, String folderName)
             throws MessagingException, IOException {
-        if (p == null || header == null || footer == null) {
+        if (p == null || header == null || footer == null || folderName == null) {
             throw new IllegalArgumentException("No null parameters allowed");
         }
         String fileName = null;
         if (p.isMimeType("text/plain")) {
             fileName = "m" + new Date().getTime() + ".txt";
-            File f = new File("./out/completed/" + fileName);
+            File f = new File("./out/completed/" + (!folderName.isEmpty() ? folderName + "/" : "") + fileName);
             BufferedWriter writer = new BufferedWriter(new FileWriter(f));
             writer.write(header + "\n");
             writer.write(p.getContent().toString());
             writer.write("\n" + footer);
             writer.close();
         }
+        return fileName;
+    }
+
+    /**
+     * Write email text to a file. The email text is in the form of a String. Also
+     * has options to add a header and footer to the text.
+     * 
+     * @param p          The body.
+     * @param header     The text that will be placed before the body.
+     * @param footer     the text that will be placed after the body.
+     * @param folderName the save folder location in /out/completed
+     * @return the name of the created file, or null if not created
+     */
+    public static String writeText(String p, String header, String footer, String folderName)
+            throws MessagingException, IOException {
+        if (p == null || header == null || footer == null || folderName == null) {
+            throw new IllegalArgumentException("No null parameters allowed");
+        }
+        String fileName = null;
+        fileName = "m" + new Date().getTime() + ".txt";
+        File f = new File("./out/completed/" + (!folderName.isEmpty() ? folderName + "/" : "") + fileName);
+        BufferedWriter writer = new BufferedWriter(new FileWriter(f));
+        writer.write(header + "\n");
+        writer.write(p);
+        writer.write("\n" + footer);
+        writer.close();
         return fileName;
     }
 

@@ -1,6 +1,8 @@
 *.txt
 !readme.txt
 *.jar
+*.htm
+*.html
 *.pdf
 \lib
 .vscode
