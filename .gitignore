@@ -4,5 +4,8 @@
 *.htm
 *.html
 *.pdf
+*.png
+*.jpg
+*.jpeg
 \lib
 .vscode

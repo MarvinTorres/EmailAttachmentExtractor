@@ -8,8 +8,12 @@ import javax.mail.Session;
 import javax.mail.Store;
 import javax.mail.internet.MimeMultipart;
 import javax.mail.internet.MimeBodyPart;
+import javax.mail.Flags.Flag;
+import javax.mail.Flags;
+import javax.mail.search.FlagTerm;
 
 import javax.mail.Part;
+
 
 import java.io.*;
 import java.util.*;
@@ -33,7 +37,7 @@ public class FetchEmailServer {
             properties.put("mail.imap.starttls.enable", "true");
             Session emailSession = Session.getDefaultInstance(properties);
 
-            // create the IMAP store object and connect with the pop server
+            // create the IMAP store object and connect with the imap server
             Store store = emailSession.getStore("imaps");
 
             store.connect(host, user, password);
@@ -42,9 +46,10 @@ public class FetchEmailServer {
             Folder emailFolder = store.getFolder("INBOX");
             emailFolder.open(Folder.READ_ONLY);
 
-            // retrieve the messages from the folder in an array and save their contents if
+            // retrieve unread messages from the folder in an array and save their contents if
             // applicable
-            Message[] messages = emailFolder.getMessages();
+            Message[] messages = emailFolder.search(new FlagTerm(new Flags(Flag.SEEN), false));
+
             logger.info("messages.length---" + messages.length);
 
             for (int i = 0, n = messages.length; i < n; i++) {
@@ -221,9 +226,9 @@ public class FetchEmailServer {
 
     public static void main(String[] args) {
 
-        String host = "imap.gmail.com";// change accordingly
+        String host = "imap.outlook.com";// change accordingly
         String mailStoreType = "imap";
-        String username = "mrtorres989@gmail.com";// change accordingly
+        String username = "mrtorres989@outlook.com";// change accordingly
         String password = "@peLucha1989";// change accordingly
 
         check(host, mailStoreType, username, password);
