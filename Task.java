@@ -6,7 +6,7 @@ import javax.mail.internet.MimeMultipart;
 import javax.mail.internet.MimeBodyPart;
 import javax.mail.Flags;
 import java.util.logging.Logger;
-
+import javax.mail.Message;
 import javax.mail.Part;
 
 import java.io.*;
@@ -88,7 +88,7 @@ public class Task {
     }
 
     /**
-     * Breaks down the main part into its subparts, then saves subparts with the
+     * Break down the main part into its subparts, then saves subparts with the
      * application/pdf or text/plain content type to a file.
      * 
      * @param main   the main part to break down
@@ -96,8 +96,7 @@ public class Task {
      * @param footer the text that will show at the end of a text file.
      * 
      */
-    public void saveMessageParts(Part main, String header, String footer, String folderName)
-            throws IOException, MessagingException {
+    public void saveMessageParts(Part main, String folderName) throws IOException, MessagingException {
         Object content = main.getContent();
 
         if (content instanceof MimeMultipart) {
@@ -109,13 +108,12 @@ public class Task {
                     if (Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition())) {
                         String PDFFile = writePDF(part, folderName);
                         if (PDFFile != null) {
-                            logger.info("---------------------------------" + "\nPDF " + PDFFile + " in ./out/pdfs/"
-                                    + folderName + " created.\n");
+                            logger.info("\nPDF " + PDFFile + " in ./out/pdfs/" + folderName + " created.\n");
                         }
                     } else if (part.isMimeType("multipart/alternative")) {
-                        saveMessageParts(part, header, footer, folderName);
+                        saveMessageParts(part, folderName);
                     } else {
-                        writeText(part, "", "", folderName);
+                        writeText(part, folderName);
                         writeHTML(part, folderName);
                     }
                 } catch (MessagingException e) {
@@ -124,8 +122,23 @@ public class Task {
             }
         } else if (content instanceof String) {
             String part = (String) content;
-            writeText(part, header, footer, folderName);
+            writeText(part, folderName);
         }
+    }
+
+    /**
+     * Save email header to a text file.
+     * 
+     * @param message    the message with header information
+     * @param folderName the save directory
+     * @throws MessagingException
+     * @throws IOException
+     */
+    public void saveHeaderInformation(Message message, String folderName) throws MessagingException, IOException {
+        logger.info("\nSubject: " + message.getSubject() + "\nFrom: " + message.getFrom()[0] + "\n");
+        String header = "Subject: " + message.getSubject() + "\nFrom: " + message.getFrom()[0] + "\nTo: "
+                + message.getAllRecipients()[0] + "\n------------------------------------------------------";
+        writeText(header, "Header", folderName);
     }
 
     /**
@@ -192,9 +205,8 @@ public class Task {
      * @param folderName the save folder location in /out/completed
      * @return the name of the created file, or null if not created
      */
-    public String writeText(MimeBodyPart p, String header, String footer, String folderName)
-            throws MessagingException, IOException {
-        if (p == null || header == null || footer == null || folderName == null) {
+    public String writeText(MimeBodyPart p, String folderName) throws MessagingException, IOException {
+        if (p == null || folderName == null) {
             throw new IllegalArgumentException("No null parameters allowed");
         }
         String fileName = null;
@@ -204,52 +216,22 @@ public class Task {
             createdFiles.put(fileName, "TEXT");
             File f = new File("./out/completed/" + (!folderName.isEmpty() ? folderName + "/" : "") + fileName);
             BufferedWriter writer = new BufferedWriter(new FileWriter(f));
-            writer.write(header + "\n");
             writer.write(p.getContent().toString());
-            writer.write("\n" + footer);
             writer.close();
         }
         return fileName;
     }
 
     /**
-     * Write email text to a file. The email text is in the form of a String. Also
-     * has options to add a header and footer to the text.
+     * Write email text to a file. The email text is in the form of a String.
      * 
      * @param p          The body.
-     * @param header     The text that will be placed before the body.
-     * @param footer     the text that will be placed after the body.
+     * @param fileName   The name of the created file. If empty, it will use a
+     *                   default name.
      * @param folderName the save folder location in /out/completed
      * @return the name of the created file, or null if not created
      */
-    public String writeText(String p, String header, String footer, String folderName)
-            throws MessagingException, IOException {
-        if (p == null || header == null || footer == null || folderName == null) {
-            throw new IllegalArgumentException("No null parameters allowed");
-        }
-        String fileName = null;
-        flags.add("TEXT_FILE_CREATED");
-        fileName = "m" + new Date().getTime() + ".txt";
-        createdFiles.put(fileName, "TEXT");
-        File f = new File("./out/completed/" + (!folderName.isEmpty() ? folderName + "/" : "") + fileName);
-        BufferedWriter writer = new BufferedWriter(new FileWriter(f));
-        writer.write(header + "\n");
-        writer.write(p);
-        writer.write("\n" + footer);
-        writer.close();
-        return fileName;
-    }
-
-        /**
-     * Write email text to a file. The email text is in the form of a String. 
-     * 
-     * @param p          The body.
-     * @param fileName   The name of the created file. If empty, it will use a default name.
-     * @param folderName the save folder location in /out/completed
-     * @return the name of the created file, or null if not created
-     */
-    public String writeText(String p, String fileName, String folderName)
-            throws MessagingException, IOException {
+    public String writeText(String p, String fileName, String folderName) throws MessagingException, IOException {
         if (p == null || folderName == null) {
             throw new IllegalArgumentException("No null parameters allowed");
         }
@@ -262,5 +244,16 @@ public class Task {
         writer.write(p);
         writer.close();
         return aFileName;
+    }
+
+    /**
+     * Write email text to a file. The email text is in the form of a String.
+     * 
+     * @param p          The body.
+     * @param folderName the save folder location in /out/completed
+     * @return the name of the created file, or null if not created
+     */
+    public String writeText(String p, String folderName) throws MessagingException, IOException {
+        return writeText(p, "", folderName);
     }
 }

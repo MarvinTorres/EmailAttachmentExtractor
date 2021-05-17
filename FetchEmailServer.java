@@ -41,27 +41,24 @@ public class FetchEmailServer {
             Folder emailFolder = store.getFolder("INBOX");
             emailFolder.open(Folder.READ_WRITE);
 
-            // retrieve unread messages from the folder in an array and save their contents
-            // if
-            // applicable
+            // retrieve unread messages from the folder and save their contents
             Message[] messages = emailFolder.search(new FlagTerm(new Flags(Flag.SEEN), false));
 
             logger.info("messages.length---" + messages.length);
 
             for (int i = 0, n = messages.length; i < n; i++) {
                 Message message = messages[i];
-                logger.info("---------------------------------" + "\nEmail Number " + (i + 1) + "\nSubject: "
-                        + message.getSubject() + "\nFrom: " + message.getFrom()[0] + "\n");
-                String header = "Subject: " + message.getSubject() + "\nFrom: " + message.getFrom()[0] + "\nTo: "
-                        + message.getAllRecipients()[0] + "\n------------------------------------------------------";
-                String footer = "-----------END OF EMAIL-----------";
+                logger.info("---------------------------------" + "\nEmail Number " + (i + 1));
                 String folderName = "m" + new Date().getTime();
                 f = new File("./out/completed/" + folderName);
                 f.mkdirs();
                 Task myTask = new Task(logger);
-                myTask.saveMessageParts(message, header, footer, folderName);
 
-                // print information relevant to the user to a separate rundown file
+                // print email header to a separate rundown file
+                myTask.saveHeaderInformation(message, folderName);
+
+                // save important message parts to their respective files
+                myTask.saveMessageParts(message, folderName);
 
                 StringBuilder emailInfo = new StringBuilder();
                 String PDFLocationsFileName = "Where_Are_The_PDFs";
@@ -78,10 +75,6 @@ public class FetchEmailServer {
                 }
 
                 myTask.writeText(emailInfo.toString(), PDFLocationsFileName, folderName);
-
-                // mark email as
-                message.setFlag(Flags.Flag.SEEN, true);
-
             }
 
             // close the store and folder objects
