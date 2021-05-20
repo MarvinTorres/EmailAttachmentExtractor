@@ -15,9 +15,13 @@ import java.util.*;
 
 public class FetchEmailServer {
 
-    private static Logger logger = Logger.getLogger("MyLogger", null);
+    private static Logger logger;
 
-    public static void check(String host, String storeType, String user, String password) {
+    public FetchEmailServer(Logger aLogger) {
+        logger = aLogger;
+    }
+
+    public void check(String host, String user, String password) {
         try {
             File f = new File("./out/pdfs/");
             f.mkdirs();
@@ -41,13 +45,25 @@ public class FetchEmailServer {
             Folder emailFolder = store.getFolder("INBOX");
             emailFolder.open(Folder.READ_WRITE);
 
+            // create the destination folder object
+            Folder destination = store.getFolder("COMPLETED");
+            if (!destination.exists()) {
+                logger.info("Created destination folder " + destination.getFullName() + " on server side.\n");
+                destination.create(Folder.HOLDS_MESSAGES);
+            }
+
             // retrieve unread messages from the folder and save their contents
-            Message[] messages = emailFolder.search(new FlagTerm(new Flags(Flag.SEEN), false));
+            Message[] messages = emailFolder.search(new FlagTerm(new Flags(Flag.SEEN), true));
+
+            // move messages to destination folder in server
+            emailFolder.copyMessages(messages, destination);
 
             logger.info("messages.length---" + messages.length);
 
             for (int i = 0, n = messages.length; i < n; i++) {
                 Message message = messages[i];
+
+                // prepare message to be written to its respective folder
                 logger.info("---------------------------------" + "\nEmail Number " + (i + 1));
                 String folderName = "m" + new Date().getTime();
                 f = new File("./out/completed/" + folderName);
@@ -88,17 +104,6 @@ public class FetchEmailServer {
         } catch (Exception e) {
             e.printStackTrace();
         }
-    }
-
-    public static void main(String[] args) {
-
-        String host = "imap.outlook.com";// change accordingly
-        String mailStoreType = "imap";
-        String username = "mrtorres989@outlook.com";// change accordingly
-        String password = "@peLucha1989";// change accordingly
-
-        check(host, mailStoreType, username, password);
-
     }
 
 }
