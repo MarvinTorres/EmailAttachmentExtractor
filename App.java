@@ -38,9 +38,14 @@ public class App {
                 result.put(properties[i], loginPropertyValueStr);
             }
 
-            FetchEmailServer fetcher = new FetchEmailServer(logger);
+            FetchEmailServer fetcher = FetchEmailServer.getInstance(result.get("host"), result.get("username"), result.get("password"), logger);
 
-            fetcher.check(result.get("host"), result.get("username"), result.get("password"));
+            while (true) {
+                logger.info("Waiting for inbox update...");
+                fetcher.waitForUpdate();
+                logger.info("Inbox updated, fetching messages...");
+                fetcher.fetch();
+            }
 
         } catch (IOException e) {
             logger.severe("The file \'login.properties\' was not found.");
@@ -48,6 +53,8 @@ public class App {
             logger.severe("The file's syntax does not meet JSON specifications. Error at position " + e.getPosition());
         } catch (IllegalArgumentException e) {
             logger.severe(e.getMessage());
+        } catch (IllegalStateException e) {
+            logger.severe("The program has entered an illegal state and must close.\nMore details:\n" + e.getMessage());
         }
     }
 }
